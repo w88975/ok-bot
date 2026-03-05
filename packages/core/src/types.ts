@@ -41,11 +41,18 @@ export interface AgentConfig {
 export interface ProviderConfig {
   /**
    * 模型标识符，格式："{provider}:{model}"
-   * 例如："openai:gpt-4o"、"anthropic:claude-3-5-sonnet-20241022"
+   * 例如："openai:gpt-4o"、"openai-compat:GLM-4.7"
+   * 支持的 provider：openai、anthropic、google、groq、openai-compat
    */
   model: string;
   /** API Key（优先于环境变量） */
   apiKey?: string;
+  /**
+   * 自定义 API 端点（OpenAI 兼容协议）
+   * 用于接入 GLM、DeepSeek、Qwen 等第三方服务
+   * 例如："https://api.z.ai/api/coding/paas/v4"
+   */
+  baseURL?: string;
 }
 
 /** Shell exec 工具配置 */

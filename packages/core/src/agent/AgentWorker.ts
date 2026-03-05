@@ -28,6 +28,7 @@ const bus = new MessageBus();
 const provider = new VercelAIProvider({
   model: config.provider.model,
   apiKey: config.provider.apiKey,
+  baseURL: config.provider.baseURL,
 });
 
 // 创建 AgentLoop（从 config 中解构，排除 ProviderConfig，改为传入 ILLMProvider 实例）

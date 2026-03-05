@@ -13,9 +13,16 @@ import type { ChatOptions, ILLMProvider, LLMResponse } from './types.js';
 
 /**
  * 从 "provider:model" 字符串解析并创建 LanguageModel 实例
- * 支持的 provider：openai、anthropic、google、groq
+ * 支持的 provider：openai、anthropic、google、groq、openai-compat
+ *
+ * 当 provider 为 "openai-compat" 或传入 baseURL 时，使用自定义兼容端点。
+ * 例如接入 GLM、DeepSeek、Qwen 等 OpenAI 兼容 API。
  */
-function resolveModel(modelString: string, apiKey?: string): LanguageModelV1 {
+function resolveModel(
+  modelString: string,
+  apiKey?: string,
+  baseURL?: string,
+): LanguageModelV1 {
   const colonIdx = modelString.indexOf(':');
   if (colonIdx === -1) {
     throw new Error(`模型格式无效："${modelString}"，请使用 "provider:model" 格式`);
@@ -23,6 +30,15 @@ function resolveModel(modelString: string, apiKey?: string): LanguageModelV1 {
 
   const provider = modelString.slice(0, colonIdx);
   const model = modelString.slice(colonIdx + 1);
+
+  // 若提供了 baseURL，或 provider 为 openai-compat，使用自定义 OpenAI 兼容端点
+  if (baseURL || provider === 'openai-compat') {
+    return createOpenAI({
+      apiKey,
+      baseURL,
+      compatibility: 'compatible',
+    })(model);
+  }
 
   switch (provider) {
     case 'openai':
@@ -35,7 +51,7 @@ function resolveModel(modelString: string, apiKey?: string): LanguageModelV1 {
       return createGroq({ apiKey })(model);
     default:
       throw new Error(
-        `不支持的 LLM provider："${provider}"，支持的 provider：openai、anthropic、google、groq`,
+        `不支持的 LLM provider："${provider}"，支持的 provider：openai、anthropic、google、groq、openai-compat（自定义端点）`,
       );
   }
 }
@@ -102,10 +118,16 @@ export class VercelAIProvider implements ILLMProvider {
   private readonly defaultModel: string;
   /** API Key（优先于对应的环境变量） */
   private readonly apiKey?: string;
+  /**
+   * 自定义 API 端点（适用于 OpenAI 兼容协议的第三方服务）
+   * 例如：https://api.z.ai/api/coding/paas/v4
+   */
+  private readonly baseURL?: string;
 
-  constructor(config: { model: string; apiKey?: string }) {
+  constructor(config: { model: string; apiKey?: string; baseURL?: string }) {
     this.defaultModel = config.model;
     this.apiKey = config.apiKey;
+    this.baseURL = config.baseURL;
   }
 
   /**
@@ -133,7 +155,7 @@ export class VercelAIProvider implements ILLMProvider {
     options?: ChatOptions,
   ): Promise<LLMResponse> {
     const modelString = options?.model ?? this.defaultModel;
-    const languageModel = resolveModel(modelString, this.apiKey);
+    const languageModel = resolveModel(modelString, this.apiKey, this.baseURL);
 
     // 清理空 content，防止各 provider 返回 400 错误
     const cleanedMessages = sanitizeEmptyContent(messages);
