@@ -1,0 +1,13 @@
+{
+  "entryPoints": ["./packages/core/src/index.ts"],
+  "out": "./apps/docs/docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "includeVersion": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/ok-bot/ok-bot"
+  }
+}

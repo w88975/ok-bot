@@ -1,0 +1,25 @@
+{
+  "name": "ok-bot",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "多 agent 个人 AI 助理框架（TypeScript + Vercel AI SDK）",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @ok-bot/server dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "docs:api": "typedoc",
+    "docs:dev": "pnpm --filter docs dev",
+    "docs:build": "pnpm docs:api && pnpm --filter docs build"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.0.8",
+    "typedoc": "^0.28.17",
+    "typedoc-plugin-markdown": "^4.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.8"
+  }
+}

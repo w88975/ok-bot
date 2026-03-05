@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+coverage/
+.turbo/
+apps/docs/.docusaurus/
+apps/docs/build/
+apps/docs/docs/api/
