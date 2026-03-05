@@ -104,9 +104,47 @@ export class TelegramChannel {
     });
   }
 
+  /**
+   * 判断群聊消息是否应当响应：
+   * - 私聊（private）：始终响应
+   * - 群聊（group / supergroup）：仅当 @提及 bot 或回复 bot 消息时响应
+   */
+  private _shouldRespond(ctx: Context): boolean {
+    const chatType = ctx.chat?.type;
+    if (chatType === 'private') return true;
+
+    const botUsername = ctx.me?.username;
+    const msg = ctx.message;
+    if (!msg) return false;
+
+    // 回复了 bot 自己的消息
+    if (msg.reply_to_message?.from?.username === botUsername) return true;
+
+    // 消息实体中包含对 bot 的 @提及
+    const entities = msg.entities ?? [];
+    return entities.some(
+      (e) =>
+        e.type === 'mention' &&
+        msg.text?.slice(e.offset, e.offset + e.length) === `@${botUsername}`,
+    );
+  }
+
+  /**
+   * 从文本中剥离 @botname 提及，避免将用户名传给 agent
+   */
+  private _stripMention(text: string, botUsername: string | undefined): string {
+    if (!botUsername) return text;
+    return text.replace(new RegExp(`@${botUsername}\\s*`, 'gi'), '').trim();
+  }
+
   private async _handleTextMessage(ctx: Context): Promise<void> {
+    if (!this._shouldRespond(ctx)) return;
+
     const chatId = String(ctx.chat?.id);
-    const text = ctx.message?.text;
+    const rawText = ctx.message?.text;
+    if (!rawText) return;
+
+    const text = this._stripMention(rawText, ctx.me?.username);
     if (!text) return;
 
     const agentId = this._resolveAgentId(chatId);
@@ -136,6 +174,8 @@ export class TelegramChannel {
   }
 
   private async _handlePhotoMessage(ctx: Context): Promise<void> {
+    if (!this._shouldRespond(ctx)) return;
+
     const chatId = String(ctx.chat?.id);
     const photos = ctx.message?.photo;
     if (!photos || photos.length === 0) return;

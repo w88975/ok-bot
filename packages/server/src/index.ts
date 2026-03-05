@@ -17,7 +17,7 @@
 
 import { serve } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
-import { AgentManager, WebChannel } from '@ok-bot/core';
+import { AgentManager, WebChannel, TelegramChannel } from '@ok-bot/core';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 
@@ -42,6 +42,24 @@ async function main() {
     const failed = results.filter((r) => r.status === 'rejected');
     for (const f of failed) {
       console.error(`[Server] ❌ Agent 启动失败：`, (f as PromiseRejectedResult).reason);
+    }
+  }
+
+  // 初始化 Telegram Channel
+  const telegramChannels: TelegramChannel[] = [];
+  const telegramPresets = config.telegramChannels ?? [];
+  if (telegramPresets.length > 0) {
+    console.info(`[Server] 正在启动 ${telegramPresets.length} 个 Telegram Channel...`);
+    const results = await Promise.allSettled(
+      telegramPresets.map(async (preset) => {
+        const channel = new TelegramChannel(preset, manager);
+        await channel.start();
+        telegramChannels.push(channel);
+      }),
+    );
+    const failed = results.filter((r) => r.status === 'rejected');
+    for (const f of failed) {
+      console.error(`[Server] ❌ Telegram Channel 启动失败：`, (f as PromiseRejectedResult).reason);
     }
   }
 
@@ -106,7 +124,10 @@ async function main() {
   // 优雅关闭
   const shutdown = async (signal: string) => {
     console.info(`\n[Server] 收到 ${signal}，正在关闭...`);
-    await manager.shutdown();
+    await Promise.all([
+      ...telegramChannels.map((ch) => ch.stop()),
+      manager.shutdown(),
+    ]);
     process.exit(0);
   };
 

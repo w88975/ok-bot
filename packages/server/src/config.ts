@@ -22,6 +22,18 @@ export interface AgentPreset extends Omit<AgentConfig, 'id'> {
 }
 
 /**
+ * 单个 Telegram Channel 的配置
+ */
+export interface TelegramChannelPreset {
+  /** Telegram Bot Token */
+  token: string;
+  /** 默认路由的 agentId（未配置 chatToAgent 路由时使用） */
+  defaultAgentId?: string;
+  /** chat_id → agentId 路由映射 */
+  chatToAgent?: Record<string, string>;
+}
+
+/**
  * ok-bot server 配置
  */
 export interface ServerConfig {
@@ -47,6 +59,11 @@ export interface ServerConfig {
     /** 请求超时毫秒数（默认 5 分钟） */
     requestTimeoutMs?: number;
   };
+  /**
+   * Telegram Channel 列表
+   * 服务器启动时自动创建并以 long polling 模式运行
+   */
+  telegramChannels?: TelegramChannelPreset[];
   /**
    * 是否启用 WebSocket channel（默认 true）
    * 启用后在 /ws 端点提供 WebSocket 服务
