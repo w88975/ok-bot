@@ -4,7 +4,7 @@
  * 模型格式："provider:model"，如 "openai:gpt-4o"、"anthropic:claude-3-5-sonnet-20241022"
  */
 
-import { generateText, type CoreMessage, type Tool, type LanguageModelV1 } from 'ai';
+import { generateText, streamText, type CoreMessage, type Tool, type LanguageModelV1 } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -162,6 +162,45 @@ export class VercelAIProvider implements ILLMProvider {
 
     const hasTools = tools && Object.keys(tools).length > 0;
 
+    // ── 流式模式（onToken 存在时） ────────────────────────────────────────────
+    if (options?.onToken) {
+      const result = streamText({
+        model: languageModel,
+        messages: cleanedMessages,
+        tools: hasTools ? tools : undefined,
+        temperature: options?.temperature ?? 0.1,
+        maxTokens: options?.maxTokens ?? 4096,
+        // AgentLoop 负责手动迭代工具调用，SDK 只做单步
+        maxSteps: 1,
+      });
+
+      // 逐 token 推送，同时消耗流（必须消耗完毕才能拿到 toolCalls / text）
+      for await (const delta of result.textStream) {
+        options.onToken(delta);
+      }
+
+      const text = await result.text;
+      const rawToolCalls = await result.toolCalls;
+      const finishReason = await result.finishReason;
+      const usage = await result.usage;
+
+      const toolCalls = rawToolCalls.map((tc) => ({
+        id: tc.toolCallId,
+        name: tc.toolName,
+        arguments: tc.args as Record<string, unknown>,
+      }));
+
+      return {
+        content: text || null,
+        toolCalls,
+        finishReason,
+        usage: usage
+          ? { promptTokens: usage.promptTokens, completionTokens: usage.completionTokens }
+          : undefined,
+      };
+    }
+
+    // ── 非流式模式（原有实现） ────────────────────────────────────────────────
     const result = await generateText({
       model: languageModel,
       messages: cleanedMessages,

@@ -20,6 +20,7 @@
 // ─── Agent ────────────────────────────────────────────────────────────────────
 export { AgentManager, AgentNotFoundError } from './agent/AgentManager.js';
 export { AgentLoop } from './agent/AgentLoop.js';
+export type { OnProgress, OnToken } from './agent/AgentLoop.js';
 export { SubagentManager } from './agent/SubagentManager.js';
 
 // ─── Context ──────────────────────────────────────────────────────────────────

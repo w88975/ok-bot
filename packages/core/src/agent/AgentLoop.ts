@@ -36,6 +36,12 @@ const TOOL_RESULT_MAX_CHARS = 500;
 export type OnProgress = (content: string, options?: { toolHint?: boolean }) => Promise<void> | void;
 
 /**
+ * SSE 流式 token 回调类型
+ * 每个文本 delta 触发一次，用于实时输出 LLM 生成的字符
+ */
+export type OnToken = (token: string) => void;
+
+/**
  * AgentLoop — 单个 agent 的核心处理引擎
  */
 export class AgentLoop {
@@ -112,12 +118,14 @@ export class AgentLoop {
    * 处理一条入站消息，返回出站消息
    *
    * @param msg 入站消息
-   * @param onProgress 进度回调（可选）
+   * @param onProgress 进度回调（工具提示、中间内容，可选）
+   * @param onToken SSE 流式 token 回调（可选）；提供时使用 streamText 实时输出
    * @returns 出站消息；无需额外回复时返回 null
    */
   async processMessage(
     msg: InboundMessage,
     onProgress?: OnProgress,
+    onToken?: OnToken,
   ): Promise<OutboundMessage | null> {
     // system channel：子 agent 结果注回
     if (msg.channel === 'system') {
@@ -163,7 +171,7 @@ export class AgentLoop {
       });
     });
 
-    const { finalContent, allMessages } = await this._runLoop(messages, progressCb);
+    const { finalContent, allMessages } = await this._runLoop(messages, progressCb, onToken);
 
     // 保存本轮消息到 session history
     this._saveTurn(session, allMessages, 1 + history.length);
@@ -184,10 +192,13 @@ export class AgentLoop {
 
   /**
    * 执行 LLM → 工具调用迭代循环
+   *
+   * @param onToken 提供时透传给每次 provider.chat() 调用，启用 SSE 流式输出
    */
   private async _runLoop(
     initialMessages: CoreMessage[],
     onProgress: OnProgress,
+    onToken?: OnToken,
   ): Promise<{ finalContent: string | null; allMessages: CoreMessage[] }> {
     let messages = initialMessages;
     let finalContent: string | null = null;
@@ -197,11 +208,12 @@ export class AgentLoop {
         model: this.model,
         temperature: this.temperature,
         maxTokens: this.maxTokens,
+        onToken,
       });
 
       if (response.toolCalls.length > 0) {
-        // 发送进度提示
-        if (response.content) await onProgress(response.content);
+        // 流式模式下中间内容已经由 onToken 输出，跳过 onProgress 避免重复打印
+        if (response.content && !onToken) await onProgress(response.content);
         const hint = response.toolCalls
           .map((tc) => {
             const firstArg = Object.values(tc.arguments)[0];

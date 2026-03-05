@@ -58,4 +58,9 @@ export interface ChatOptions {
   temperature?: number;
   /** 最大输出 token */
   maxTokens?: number;
+  /**
+   * SSE 流式 token 回调
+   * 提供时使用 streamText 替代 generateText，每个文本 delta 触发一次
+   */
+  onToken?: (token: string) => void;
 }
