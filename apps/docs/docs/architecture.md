@@ -38,14 +38,16 @@ InboundMessage
 ContextBuilder.buildMessages()
      │  (system prompt: identity → bootstrap → memory → skills)
      ▼
-generateText(LLM)
+provider.chat(LLM)
+     │  ├── onToken 未提供 → generateText（非流式）
+     │  └── onToken 已提供 → streamText（SSE 流式，逐 token 回调）
      │
      ├── text response → OutboundMessage
      └── tool calls ──┐
                        ▼
                ToolRegistry.execute(tool)
                        │
-                       └─ loop again (迭代)
+                       └─ loop again (迭代，继续透传 onToken)
 ```
 
 ## 分层 System Prompt

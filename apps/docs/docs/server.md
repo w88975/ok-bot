@@ -169,7 +169,7 @@ curl -X DELETE http://localhost:3000/agents/my-agent
 
 ### `POST /agents/:agentId/chat`
 
-向指定 agent 发送消息，**同步等待**回复。
+向指定 agent 发送消息，**同步等待**完整回复（JSON）。
 
 ```bash
 curl -X POST http://localhost:3000/agents/my-agent/chat \
@@ -193,6 +193,68 @@ curl -X POST http://localhost:3000/agents/my-agent/chat \
 
 ```json
 { "content": "工作目录下有以下文件：...", "sessionKey": "user-123" }
+```
+
+---
+
+### `POST /agents/:agentId/chat/stream`
+
+向指定 agent 发送消息，以 **SSE（Server-Sent Events）** 形式流式返回 token，适用于需要实时展示打字效果的客户端。
+
+```bash
+curl -X POST http://localhost:3000/agents/my-agent/chat/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"content": "帮我查看工作目录下有哪些文件", "sessionKey": "user-123"}'
+```
+
+**请求体**：与 `POST /chat` 完全相同。
+
+**响应** `200 OK`，`Content-Type: text/event-stream`，依次推送：
+
+| event | data | 说明 |
+|-------|------|------|
+| `token` | 文本 delta（字符串） | LLM 每生成一个 token 推送一次 |
+| `done` | `{ "content": "...", "sessionKey": "..." }` | 全部生成完毕，含最终完整内容 |
+| `error` | 错误信息（字符串） | 发生异常时推送，之后流关闭 |
+
+**示例流输出**：
+
+```
+event: token
+data: 工
+
+event: token
+data: 作目录
+
+event: token
+data: 下有以下文件：
+
+event: done
+data: {"content":"工作目录下有以下文件：README.md, src/","sessionKey":"user-123"}
+```
+
+**JavaScript 客户端示例**：
+
+```javascript
+const res = await fetch('/agents/my-agent/chat/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ content: '你好', sessionKey: 'web:user' }),
+});
+
+const reader = res.body.getReader();
+const decoder = new TextDecoder();
+
+for await (const chunk of readChunks(reader)) {
+  const lines = decoder.decode(chunk).split('\n');
+  for (const line of lines) {
+    if (line.startsWith('data:')) {
+      const data = line.slice(5).trim();
+      process.stdout.write(data); // 逐 token 打印
+    }
+  }
+}
 ```
 
 ---

@@ -98,11 +98,13 @@ export interface WorkerInboundMessage {
 
 /** Worker Thread 消息协议 — 出站（Worker → 主线程） */
 export interface WorkerOutboundMessage {
-  type: 'response' | 'error' | 'ready';
+  type: 'response' | 'error' | 'ready' | 'token';
   /** 出站消息载荷（type='response' 时有效） */
   payload?: import('./bus/events.js').OutboundMessage;
   /** 对应请求 ID */
   requestId?: string;
   /** 错误信息（type='error' 时有效） */
   error?: string;
+  /** 流式 token 文本（type='token' 时有效） */
+  token?: string;
 }

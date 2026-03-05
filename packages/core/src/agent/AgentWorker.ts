@@ -113,7 +113,18 @@ parentPort.on('message', async (msg: WorkerInboundMessage) => {
         inbound.metadata = { ...inbound.metadata, _requestId: msg.requestId };
       }
 
-      const response = await agentLoop.processMessage(inbound);
+      // 若请求携带 requestId，创建 onToken 回调把 token 实时转发给主线程
+      const onToken = msg.requestId
+        ? (token: string) => {
+            parentPort!.postMessage({
+              type: 'token',
+              token,
+              requestId: msg.requestId,
+            } satisfies WorkerOutboundMessage);
+          }
+        : undefined;
+
+      const response = await agentLoop.processMessage(inbound, undefined, onToken);
 
       if (response) {
         const outMsg: WorkerOutboundMessage = {

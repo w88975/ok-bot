@@ -18,6 +18,17 @@ VercelAIProvider 必须通过 Vercel AI SDK 支持 OpenAI、Anthropic、Google G
 - **当** 配置不同的 model string（如 `openai:gpt-4o`、`anthropic:claude-3-5-sonnet`）时
 - **那么** 必须路由到对应的 Vercel AI SDK provider，不需修改其他代码
 
+### 需求:支持 SSE 流式输出
+VercelAIProvider 必须在 `ChatOptions` 中支持 `onToken` 回调；当其存在时改用 `streamText` 进行流式调用，每个文本 delta 立即触发 `onToken`，最终仍返回完整的 `LLMResponse`。
+
+#### 场景:流式输出 token
+- **当** 调用 `provider.chat()` 时传入 `options.onToken`
+- **那么** 必须使用 `streamText` 代替 `generateText`，每个文本 delta 调用一次 `onToken(delta)`，全部 delta 消耗完毕后再返回含 `content`、`toolCalls` 的 `LLMResponse`
+
+#### 场景:不传 onToken 时保持原有行为
+- **当** 调用 `provider.chat()` 时未传 `options.onToken`
+- **那么** 必须使用 `generateText`（原有行为），不影响现有代码路径
+
 ### 需求:清理空内容防止 provider 报错
 VercelAIProvider 必须在发送请求前过滤消息中的空字符串内容，防止各 provider 因空 content 返回 400 错误。
 

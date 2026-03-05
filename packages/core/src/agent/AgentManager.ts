@@ -31,6 +31,8 @@ interface PendingRequest {
   resolve: (msg: OutboundMessage) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
+  /** SSE 流式 token 回调（可选） */
+  onToken?: (token: string) => void;
 }
 
 /** 内部 agent 实例记录 */
@@ -152,6 +154,11 @@ export class AgentManager {
     chatId?: string;
     media?: string[];
     metadata?: Record<string, unknown>;
+    /**
+     * SSE 流式 token 回调
+     * 提供时，Worker 每生成一个 token 即调用一次，最终仍 resolve 完整 OutboundMessage
+     */
+    onToken?: (token: string) => void;
   }): Promise<OutboundMessage> {
     const instance = this._getAgent(options.agentId);
     const requestId = Math.random().toString(36).slice(2, 18);
@@ -174,7 +181,7 @@ export class AgentManager {
         reject(new Error(`Agent "${options.agentId}" 请求超时（${this.requestTimeoutMs}ms）`));
       }, this.requestTimeoutMs);
 
-      instance.pendingRequests.set(requestId, { resolve, reject, timer });
+      instance.pendingRequests.set(requestId, { resolve, reject, timer, onToken: options.onToken });
 
       const workerMsg: WorkerInboundMessage = {
         type: 'message',
@@ -246,13 +253,19 @@ export class AgentManager {
     return instance;
   }
 
-  /** 处理 Worker 发来的消息（响应 or 主动推送） */
+  /** 处理 Worker 发来的消息（响应 or token or 主动推送） */
   private _handleWorkerMessage(instance: AgentInstance, msg: WorkerOutboundMessage): void {
     if (msg.type === 'ready') return; // 已在 createAgent 处理
 
     if (msg.requestId) {
       const pending = instance.pendingRequests.get(msg.requestId);
       if (pending) {
+        // SSE 流式 token：转发给调用方回调，不结束 pending
+        if (msg.type === 'token' && msg.token !== undefined) {
+          pending.onToken?.(msg.token);
+          return;
+        }
+
         clearTimeout(pending.timer);
         instance.pendingRequests.delete(msg.requestId);
 

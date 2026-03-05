@@ -37,6 +37,19 @@
       "temperature": 0.1,
       "maxTokens": 4096,
       "heartbeatIntervalSeconds": 1800
+    },
+    {
+      "id": "doctor",
+      "workspace": "/Users/kamisama/ok-bot-workspace/华二",
+      "provider": {
+        "model": "openai-compat:qwen-max",
+        "apiKey": "sk-c98a09f4df3442f49ab7e7b5b132b49e",
+        "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      },
+      "maxIterations": 20,
+      "temperature": 0.1,
+      "maxTokens": 4096,
+      "heartbeatIntervalSeconds": 1800
     }
   ]
 }

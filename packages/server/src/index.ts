@@ -112,6 +112,7 @@ async function main() {
     console.info(`  GET  ${base}/agents`);
     console.info(`  POST ${base}/agents`);
     console.info(`  POST ${base}/agents/:id/chat`);
+    console.info(`  POST ${base}/agents/:id/chat/stream  (SSE)`);
     if (webChannelEnabled) {
       console.info(`  WS   ${wsBase}/ws`);
     }
