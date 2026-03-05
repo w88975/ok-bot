@@ -9,6 +9,7 @@ export default defineConfig({
       'tests/**/*.test.ts',
       'tests/**/*.spec.ts',
     ],
+    exclude: ['**/node_modules/**', '**/dist/**'],
     // 使用 node 环境运行测试
     environment: 'node',
     // 全局 API（describe, it, expect）
@@ -22,9 +23,10 @@ export default defineConfig({
     },
   },
   resolve: {
-    // 支持 workspace 包的别名解析
+    // 支持 workspace 包的别名解析（测试时直接指向 src，无需编译）
     alias: {
       '@ok-bot/core': new URL('./packages/core/src/index.ts', import.meta.url).pathname,
+      '@ok-bot/server': new URL('./packages/server/src/index.ts', import.meta.url).pathname,
     },
   },
 });

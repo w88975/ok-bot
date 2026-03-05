@@ -5,6 +5,7 @@ const sidebars: SidebarsConfig = {
     { type: 'doc', id: 'intro', label: '介绍' },
     { type: 'doc', id: 'quickstart', label: '快速开始' },
     { type: 'doc', id: 'architecture', label: '架构设计' },
+    { type: 'doc', id: 'server', label: 'HTTP Server' },
   ],
   apiSidebar: [
     {

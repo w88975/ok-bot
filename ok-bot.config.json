@@ -1,0 +1,32 @@
+{
+  "port": 3000,
+  "hostname": "0.0.0.0",
+  "agents": [
+    {
+      "id": "haozhu",
+      "workspace": "/Users/kamisama/ok-bot-workspace/豪猪",
+      "provider": {
+        "model": "openai-compat:GLM-4.7",
+        "apiKey": "b48f6385caae44199023e2bbd5aad30b.W9S0WZRbBO8OBbuO",
+        "baseURL": "https://api.z.ai/api/coding/paas/v4"
+      },
+      "maxIterations": 20,
+      "temperature": 0.1,
+      "maxTokens": 4096,
+      "heartbeatIntervalSeconds": 1800
+    },
+    {
+      "id": "didi",
+      "workspace": "/Users/kamisama/ok-bot-workspace/笛笛",
+      "provider": {
+        "model": "openai-compat:GLM-4.7",
+        "apiKey": "b48f6385caae44199023e2bbd5aad30b.W9S0WZRbBO8OBbuO",
+        "baseURL": "https://api.z.ai/api/coding/paas/v4"
+      },
+      "maxIterations": 20,
+      "temperature": 0.1,
+      "maxTokens": 4096,
+      "heartbeatIntervalSeconds": 1800
+    }
+  ]
+}

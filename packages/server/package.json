@@ -6,7 +6,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "node --watch dist/index.js",
+    "dev": "tsc -p tsconfig.json && node --watch dist/index.js",
+    "dev:watch": "tsc --watch --preserveWatchOutput -p tsconfig.json",
     "start": "node dist/index.js"
   },
   "dependencies": {

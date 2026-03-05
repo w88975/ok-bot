@@ -10,7 +10,7 @@ import readline from 'node:readline';
 import os from 'node:os';
 import path from 'node:path';
 
-const WORKSPACE = path.join(os.homedir(), 'ok-bot-workspace');
+const WORKSPACE = path.join(os.homedir(), 'ok-bot-workspace/豪猪');
 const AGENT_ID = 'default';
 
 const manager = new AgentManager();
