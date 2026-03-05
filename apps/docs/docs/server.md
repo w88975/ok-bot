@@ -274,3 +274,148 @@ curl -X POST http://localhost:3000/agents/coder/chat \
 ```
 
 两个 agent 运行在独立的 Worker Thread 中，互不干扰，各自有独立的记忆和会话历史。
+
+---
+
+## WebSocket Channel
+
+服务器同时提供 WebSocket 端点 `/ws`，支持实时双向通信、群组聊天和在线创建 agent。
+
+### 连接
+
+```javascript
+const ws = new WebSocket('ws://localhost:3000/ws');
+// 若启用了 authToken，通过 ?token= 传入
+// const ws = new WebSocket('ws://localhost:3000/ws?token=your-secret');
+```
+
+连接成功后服务器自动推送：
+1. `connected` — 包含分配的 `clientId`
+2. `agent-status` — 当前所有 agent 状态列表
+
+### 消息协议
+
+所有消息均为 JSON 格式。
+
+#### 客户端 → 服务器
+
+| 类型 | 描述 |
+|------|------|
+| `chat` | 向单个 agent 发送消息 |
+| `group-chat` | 向群组发送消息（支持 @mention） |
+| `create-agent` | 创建新 agent |
+| `list-agents` | 查询 agent 列表 |
+| `create-group` | 创建群组 |
+| `update-group` | 更新群组成员 |
+
+#### 单聊
+
+```json
+{
+  "type": "chat",
+  "agentId": "my-agent",
+  "content": "你好，今天天气如何？",
+  "sessionKey": "web:my-agent"
+}
+```
+
+服务器回复：
+```json
+{
+  "type": "message",
+  "agentId": "my-agent",
+  "content": "...",
+  "sessionKey": "web:my-agent"
+}
+```
+
+#### 群组聊天
+
+```json
+{
+  "type": "group-chat",
+  "groupId": "my-group",
+  "content": "@agent-a 帮我写一首诗",
+  "mentions": ["agent-a"]
+}
+```
+
+- `mentions` 为空时，广播给群组所有成员
+- 每个 agent 的回复独立推送，`groupId` 字段标识所属群组
+
+#### 创建群组
+
+```json
+{
+  "type": "create-group",
+  "groupId": "my-group",
+  "name": "创意工作室",
+  "agentIds": ["agent-a", "agent-b"]
+}
+```
+
+#### 创建 Agent
+
+```json
+{
+  "type": "create-agent",
+  "config": {
+    "id": "new-agent",
+    "workspace": "/path/to/workspace",
+    "provider": { "model": "openai:gpt-4o", "apiKey": "sk-..." }
+  },
+  "bootstrap": {
+    "soul": "# 我是一个乐于助人的助理\n...",
+    "agents": "# Agent 描述\n..."
+  }
+}
+```
+
+#### 服务器 → 客户端
+
+| 类型 | 触发时机 |
+|------|----------|
+| `connected` | 握手成功 |
+| `agent-status` | 连接时 / agent 变更时广播 |
+| `message` | agent 回复 |
+| `agent-created` | agent 创建成功 |
+| `group-created` | 群组创建成功 |
+| `group-status` | 群组成员变更 |
+| `group-dissolved` | 群组成员不足 2 人时自动解散 |
+| `error` | 错误通知 |
+
+---
+
+## Web UI
+
+服务器内置了一个 React 前端界面，提供可视化的 agent 管理和聊天体验。
+
+### 构建与访问
+
+```bash
+# 构建 Web UI（生成静态资源到 packages/web-ui/dist/）
+pnpm build:ui
+
+# 启动服务器（自动提供 Web UI）
+node packages/server/dist/index.js
+```
+
+访问 `http://localhost:3000/app/` 打开 Web UI。
+
+### 功能
+
+- **侧边栏**：显示所有 agent 及状态，支持一键创建 agent
+- **单聊**：与指定 agent 进行对话（输入 `/new` 开启新会话）
+- **群组聊天**：创建群组后，消息广播给所有成员；支持 `@agentId` 定向发送
+- **暗色模式**：自动跟随系统偏好
+- **实时连接状态**：顶部显示 WebSocket 连接状态，断线自动重连
+
+### 禁用 Web UI / WebSocket
+
+```json
+{
+  "port": 3000,
+  "webChannel": false,
+  "webUI": false
+}
+```

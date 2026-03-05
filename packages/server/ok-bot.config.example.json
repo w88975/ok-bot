@@ -3,6 +3,8 @@
   "port": 3000,
   "hostname": "0.0.0.0",
   "authToken": "your-secret-token-here",
+  "webChannel": true,
+  "webUI": true,
   "managerOptions": {
     "requestTimeoutMs": 300000
   },

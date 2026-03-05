@@ -47,6 +47,16 @@ export interface ServerConfig {
     /** 请求超时毫秒数（默认 5 分钟） */
     requestTimeoutMs?: number;
   };
+  /**
+   * 是否启用 WebSocket channel（默认 true）
+   * 启用后在 /ws 端点提供 WebSocket 服务
+   */
+  webChannel?: boolean;
+  /**
+   * 是否启用 Web UI 静态文件服务（默认 true）
+   * 启用后在 /app/ 提供前端页面，需先运行 pnpm build:ui
+   */
+  webUI?: boolean;
 }
 
 /** 默认配置 */

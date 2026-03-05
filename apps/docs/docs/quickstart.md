@@ -90,6 +90,27 @@ curl -X POST http://localhost:3000/agents/my-agent/chat \
   -d '{ "content": "你好！" }'
 ```
 
+## Web UI 快速开始
+
+ok-bot 服务器内置了一个 React 前端，可以直接在浏览器中与 agent 聊天。
+
+```bash
+# 1. 构建 Web UI
+pnpm build:ui
+
+# 2. 启动服务器（已内置 Web UI 静态资源服务）
+node packages/server/dist/index.js
+```
+
+访问 `http://localhost:3000/app/` 打开界面。
+
+功能：
+- 点击「新建 Agent」创建 agent（可内联填写 AGENTS.md/SOUL.md 内容）
+- 在侧边栏选择 agent 开始单聊
+- 点击「新建群组」选择多个 agent 组成群组
+- 在群组对话中使用 `@agentId` 定向发送，或直接发送广播给所有成员
+- 输入 `/new` 重置当前会话历史
+
 ## Telegram 集成
 
 ```typescript

@@ -56,6 +56,27 @@ export type { HeartbeatServiceConfig } from './scheduler/HeartbeatService.js';
 // ─── Channels ─────────────────────────────────────────────────────────────────
 export { TelegramChannel, ChannelManager } from './channels/telegram/TelegramChannel.js';
 export type { TelegramChannelConfig } from './channels/telegram/TelegramChannel.js';
+export { WebChannel } from './channels/web/WebChannel.js';
+export type { WebChannelConfig } from './channels/web/WebChannel.js';
+export type {
+  ClientMessage,
+  ServerMessage,
+  ChatMessage,
+  GroupChatMessage,
+  CreateAgentMessage,
+  ListAgentsMessage,
+  CreateGroupMessage,
+  UpdateGroupMessage,
+  ConnectedMessage,
+  AgentStatusMessage,
+  AgentMessage,
+  AgentCreatedMessage,
+  GroupCreatedMessage,
+  GroupStatusMessage,
+  GroupDissolvedMessage,
+  ErrorMessage,
+  GroupInfo,
+} from './channels/web/types.js';
 
 // ─── Bus ──────────────────────────────────────────────────────────────────────
 export { MessageBus } from './bus/MessageBus.js';
