@@ -53,8 +53,8 @@ HTTP server 必须提供针对指定 agent 的定时任务增删查接口。
 - **那么** 必须删除任务并返回 204
 
 ### 需求:健康检查接口
-HTTP server 必须提供健康检查接口。
+HTTP server 必须提供健康检查接口，响应中禁止包含 `webChannel` 或 `webUI` 字段。
 
 #### 场景:健康检查
 - **当** `GET /health` 请求到达时
-- **那么** 必须返回 200 和 `{ status: "ok", agents: <count> }`
+- **那么** 必须返回 200 和 `{ status: "ok", agents: <count>, uptime: <seconds>, version: <string> }`，禁止包含 `webChannel` 或 `webUI` 字段

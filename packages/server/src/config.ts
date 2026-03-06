@@ -64,16 +64,6 @@ export interface ServerConfig {
    * 服务器启动时自动创建并以 long polling 模式运行
    */
   telegramChannels?: TelegramChannelPreset[];
-  /**
-   * 是否启用 WebSocket channel（默认 true）
-   * 启用后在 /ws 端点提供 WebSocket 服务
-   */
-  webChannel?: boolean;
-  /**
-   * 是否启用 Web UI 静态文件服务（默认 true）
-   * 启用后在 /app/ 提供前端页面，需先运行 pnpm build:ui
-   */
-  webUI?: boolean;
 }
 
 /** 默认配置 */

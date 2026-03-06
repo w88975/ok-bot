@@ -5,19 +5,13 @@
  * 1. 加载配置
  * 2. 创建 AgentManager
  * 3. 预创建配置中定义的所有 agent
- * 4. 创建 Hono app（HTTP 路由 + Web UI）
- * 5. 对同一个 app 调用 createNodeWebSocket，获取 upgradeWebSocket / injectWebSocket
- * 6. 把 WebChannel 附加到 app（使用同一 upgradeWebSocket）
- * 7. serve(app) 启动 HTTP server
- * 8. injectWebSocket(server) 激活 WebSocket 升级支持
- *
- * 关键约束：createNodeWebSocket({ app }) 和 channel.attach(app, upgradeWebSocket) 必须使用
- * 同一个 Hono app 实例，否则 WebSocket 升级时找不到 /ws 路由。
+ * 4. 初始化 Telegram Channel
+ * 5. 创建 Hono app（HTTP 路由）
+ * 6. serve(app) 启动 HTTP server
  */
 
 import { serve } from '@hono/node-server';
-import { createNodeWebSocket } from '@hono/node-ws';
-import { AgentManager, WebChannel, TelegramChannel } from '@ok-bot/core';
+import { AgentManager, TelegramChannel } from '@ok-bot/core';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 
@@ -63,42 +57,21 @@ async function main() {
     }
   }
 
-  // 创建 Hono app（HTTP 路由 + Web UI 静态文件）
+  // 创建 Hono app（HTTP 路由）
   const app = createApp(manager, config);
-
-  // WebSocket channel：必须在同一个 app 实例上调用 createNodeWebSocket
-  // 这样 injectWebSocket 才能正确拦截升级请求并找到 /ws 路由
-  const webChannelEnabled = config.webChannel !== false;
-  const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
-
-  if (webChannelEnabled) {
-    const channel = new WebChannel({
-      manager,
-      authToken: config.authToken,
-    });
-    channel.attach(app, upgradeWebSocket);
-    console.info('[Server] WebSocket channel 已启用：ws://localhost/ws');
-  }
 
   // 启动 HTTP server
   const port = config.port ?? 3000;
   const hostname = config.hostname ?? '0.0.0.0';
 
-  const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
+  serve({ fetch: app.fetch, port, hostname }, (info) => {
     const base = `http://${info.address === '0.0.0.0' ? 'localhost' : info.address}:${info.port}`;
-    const wsBase = `ws://${info.address === '0.0.0.0' ? 'localhost' : info.address}:${info.port}`;
     console.info('');
     console.info('┌────────────────────────────────────────┐');
     console.info('│           ok-bot server 已启动          │');
     console.info('├────────────────────────────────────────┤');
     console.info(`│  地址：${base.padEnd(31)}│`);
     console.info(`│  健康：${(base + '/health').padEnd(31)}│`);
-    if (webChannelEnabled) {
-      console.info(`│  WS：${(wsBase + '/ws').padEnd(33)}│`);
-    }
-    if (config.webUI !== false) {
-      console.info(`│  UI：${(base + '/app/').padEnd(33)}│`);
-    }
     if (config.authToken) {
       console.info('│  认证：Bearer Token 已启用              │');
     }
@@ -113,14 +86,8 @@ async function main() {
     console.info(`  POST ${base}/agents`);
     console.info(`  POST ${base}/agents/:id/chat`);
     console.info(`  POST ${base}/agents/:id/chat/stream  (SSE)`);
-    if (webChannelEnabled) {
-      console.info(`  WS   ${wsBase}/ws`);
-    }
     console.info('');
   });
-
-  // 激活 WebSocket 升级支持（必须在 serve 之后调用）
-  injectWebSocket(server);
 
   // 优雅关闭
   const shutdown = async (signal: string) => {

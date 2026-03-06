@@ -6,9 +6,7 @@
   "description": "多 agent 个人 AI 助理框架（TypeScript + Vercel AI SDK）",
   "scripts": {
     "build": "pnpm -r build",
-    "build:ui": "pnpm --filter @ok-bot/web-ui build",
     "dev": "pnpm --filter @ok-bot/server dev",
-    "dev:ui": "pnpm --filter @ok-bot/web-ui dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
