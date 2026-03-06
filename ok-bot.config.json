@@ -3,6 +3,19 @@
   "hostname": "0.0.0.0",
   "agents": [
     {
+      "id": "doctor",
+      "workspace": "/Users/kamisama/ok-bot-workspace/华二",
+      "provider": {
+        "model": "openai-compat:qwen-max",
+        "apiKey": "sk-c98a09f4df3442f49ab7e7b5b132b49e",
+        "baseURL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      },
+      "maxIterations": 200,
+      "temperature": 0.1,
+      "maxTokens": 4096,
+      "heartbeatIntervalSeconds": 1800
+    },
+    {
       "id": "haozhu",
       "workspace": "/Users/kamisama/ok-bot-workspace/豪猪",
       "provider": {

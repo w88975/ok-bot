@@ -41,6 +41,8 @@ export interface ContextBuilderConfig {
   workspace: string;
   /** bot 名称（显示在 identity 节） */
   botName?: string;
+  /** 外部传入的 SkillsLoader 实例（与 AgentLoop 共享，避免重复扫描） */
+  skillsLoader?: SkillsLoader;
 }
 
 /**
@@ -56,7 +58,7 @@ export class ContextBuilder {
     this.workspace = config.workspace;
     this.botName = config.botName ?? 'ok-bot';
     this.bootstrapLoader = new FileBootstrapLoader(config.workspace);
-    this.skillsLoader = new SkillsLoader(config.workspace);
+    this.skillsLoader = config.skillsLoader ?? new SkillsLoader(config.workspace);
   }
 
   /**
@@ -94,11 +96,16 @@ export class ContextBuilder {
       }
     }
 
-    // [5] skills summary（XML 摘要，agent 按需用 read_file 加载）
-    const skillsSummary = this.skillsLoader.buildSkillsSummary();
-    if (skillsSummary) {
+    // [5] skills 调用指令（非 always skills 通过工具调用按需加载）
+    const nonAlwaysSkills = this.skillsLoader
+      .listSkills()
+      .filter((s) => s.available && !s.meta.always);
+    if (nonAlwaysSkills.length > 0) {
+      const skillList = nonAlwaysSkills
+        .map((s) => `- \`skill_${s.name.replace(/-/g, '_')}\`：${s.meta.description}`)
+        .join('\n');
       parts.push(
-        `# Skills\n\n以下 skills 扩展了你的能力。需要使用某个 skill 时，用 read_file 工具读取其 SKILL.md 文件。\navailable="false" 的 skill 需要先安装依赖。\n\n${skillsSummary}`,
+        `# Skills 使用规则\n\n收到用户消息后，先理解用户意图，再检查以下可用技能工具。如果意图与某个技能匹配，**必须优先调用该技能工具**，不得跳过直接回复。\n\n${skillList}`,
       );
     }
 

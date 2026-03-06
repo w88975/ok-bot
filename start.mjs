@@ -28,7 +28,7 @@ const agentLoop = new AgentLoop({
   workspace: WORKSPACE,
   provider,
   bus,
-  maxIterations: 20,
+  maxIterations: 200,
   temperature: 0.1,
   maxTokens: 4096,
 });

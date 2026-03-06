@@ -98,7 +98,7 @@ export interface WorkerInboundMessage {
 
 /** Worker Thread 消息协议 — 出站（Worker → 主线程） */
 export interface WorkerOutboundMessage {
-  type: 'response' | 'error' | 'ready' | 'token';
+  type: 'response' | 'error' | 'ready' | 'token' | 'progress';
   /** 出站消息载荷（type='response' 时有效） */
   payload?: import('./bus/events.js').OutboundMessage;
   /** 对应请求 ID */
@@ -107,4 +107,6 @@ export interface WorkerOutboundMessage {
   error?: string;
   /** 流式 token 文本（type='token' 时有效） */
   token?: string;
+  /** 工具调用进度提示（type='progress' 时有效） */
+  hint?: string;
 }

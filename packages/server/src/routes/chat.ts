@@ -79,6 +79,9 @@ export function chatRouter(manager: AgentManager): Hono {
           onToken: async (token) => {
             await stream.writeSSE({ event: 'token', data: token });
           },
+          onProgress: async (hint) => {
+            await stream.writeSSE({ event: 'progress', data: hint });
+          },
         });
 
         // 最终完整内容（含工具调用后的全文）

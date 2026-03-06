@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/kamisama/workspace/ok-bot-demo/ 2>/dev/null && echo \"---\" && cat /Users/kamisama/workspace/ok-bot-demo/*.html 2>/dev/null | head -200 || echo \"not found\")",
+      "Bash(openspec-cn new change \"fix-html-client-missing-tools-skills\" 2>&1)",
+      "Bash(openspec-cn status --change \"fix-html-client-missing-tools-skills\" --json 2>&1)",
+      "Bash(openspec-cn instructions proposal --change \"fix-html-client-missing-tools-skills\" --json 2>&1)",
+      "Read(//Users/kamisama/ok-bot-workspace/**)",
+      "Read(//Users/kamisama/ok-bot-workspace/华二/**)",
+      "Read(//Users/kamisama/ok-bot-workspace/豪猪/**)",
+      "Bash(openspec-cn instructions design --change \"fix-html-client-missing-tools-skills\" --json 2>&1)",
+      "Bash(openspec-cn instructions specs --change \"fix-html-client-missing-tools-skills\" --json 2>&1)",
+      "Bash(openspec-cn instructions tasks --change \"fix-html-client-missing-tools-skills\" --json 2>&1)",
+      "Bash(openspec-cn status --change \"fix-html-client-missing-tools-skills\" 2>&1)"
+    ]
+  }
+}

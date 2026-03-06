@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { AgentManager, AgentNotFoundError } from '@ok-bot/core';
 import { agentsRouter } from './routes/agents.js';
@@ -44,6 +45,15 @@ const WEB_UI_DIST = path.resolve(
  */
 export function createApp(manager: AgentManager, config: ServerConfig = {}): Hono {
   const app = new Hono();
+
+  // CORS（最先执行，确保 preflight 请求也能通过）
+  app.use('*', cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposeHeaders: ['Content-Type'],
+    maxAge: 86400,
+  }));
 
   // 请求日志（最先执行）
   app.use('*', requestLogger());

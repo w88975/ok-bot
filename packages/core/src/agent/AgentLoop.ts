@@ -23,6 +23,8 @@ import { createShellTool } from '../tools/builtin/ShellTool.js';
 import { createWebSearchTool, createWebFetchTool } from '../tools/builtin/WebTools.js';
 import { MessageTool } from '../tools/builtin/MessageTool.js';
 import { SpawnTool } from '../tools/builtin/SpawnTool.js';
+import { SkillsLoader } from '../skills/SkillsLoader.js';
+import { createSkillTools } from '../skills/SkillTools.js';
 import type { AgentConfig } from '../types.js';
 
 /** 工具结果最大字符数（超出截断存入 history） */
@@ -74,7 +76,6 @@ export class AgentLoop {
     this.maxTokens = config.maxTokens ?? 4096;
     this.memoryWindow = config.memoryWindow ?? 100;
 
-    this.contextBuilder = new ContextBuilder({ workspace: config.workspace, botName: 'ok-bot' });
     this.sessionManager = new SessionManager(config.workspace);
     this.memoryStore = new MemoryStore(config.workspace);
 
@@ -97,6 +98,15 @@ export class AgentLoop {
 
     this.messageTool = new MessageTool((msg) => this.bus.publishOutbound(msg));
     this.tools.register(this.messageTool.toDefinition());
+
+    // 注册 skill 工具（共享同一 SkillsLoader 实例，避免重复扫描）
+    const skillsLoader = new SkillsLoader(config.workspace);
+    this.contextBuilder = new ContextBuilder({ workspace: config.workspace, botName: 'ok-bot', skillsLoader });
+    for (const skillTool of createSkillTools(skillsLoader)) {
+      this.tools.register(skillTool);
+    }
+
+    this.messageTool = new MessageTool((msg) => this.bus.publishOutbound(msg));
 
     this.subagentManager = new SubagentManager({
       provider: this.provider,

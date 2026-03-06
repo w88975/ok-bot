@@ -124,7 +124,18 @@ parentPort.on('message', async (msg: WorkerInboundMessage) => {
           }
         : undefined;
 
-      const response = await agentLoop.processMessage(inbound, undefined, onToken);
+      // 若请求携带 requestId，创建 onProgress 回调把工具调用进度转发给主线程
+      const onProgress = msg.requestId
+        ? (hint: string) => {
+            parentPort!.postMessage({
+              type: 'progress',
+              hint,
+              requestId: msg.requestId,
+            } satisfies WorkerOutboundMessage);
+          }
+        : undefined;
+
+      const response = await agentLoop.processMessage(inbound, onProgress, onToken);
 
       if (response) {
         const outMsg: WorkerOutboundMessage = {
