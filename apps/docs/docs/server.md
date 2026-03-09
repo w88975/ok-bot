@@ -143,6 +143,7 @@ curl -X POST http://localhost:3000/agents \
 | `provider.model` | ✅ | 模型字符串，如 `openai:gpt-4o`、`openai-compat:GLM-4.7` |
 | `provider.apiKey` | - | API Key |
 | `provider.baseURL` | - | 自定义 API 端点（OpenAI 兼容协议） |
+| `provider.thinking` | - | 深度思考配置：`{ "enabled": true, "budgetTokens": 8000 }`（仅 Anthropic 生效） |
 | `maxIterations` | - | 最大工具调用轮次（默认 40） |
 | `temperature` | - | 温度参数（默认 0.1） |
 | `restrictToWorkspace` | - | 文件操作是否限制在 workspace 内 |
@@ -199,7 +200,7 @@ curl -X POST http://localhost:3000/agents/my-agent/chat \
 
 ### `POST /agents/:agentId/chat/stream`
 
-向指定 agent 发送消息，以 **SSE（Server-Sent Events）** 形式流式返回 token，适用于需要实时展示打字效果的客户端。
+向指定 agent 发送消息，以 **SSE（Server-Sent Events）** 形式流式返回**结构化事件**，便于前端区分「思考中」「文本输出」「工具调用」「错误」等状态。
 
 ```bash
 curl -X POST http://localhost:3000/agents/my-agent/chat/stream \
@@ -210,31 +211,50 @@ curl -X POST http://localhost:3000/agents/my-agent/chat/stream \
 
 **请求体**：与 `POST /chat` 完全相同。
 
-**响应** `200 OK`，`Content-Type: text/event-stream`，依次推送：
+**响应** `200 OK`，`Content-Type: text/event-stream`。每条 SSE 的 `event` 字段为事件类型，`data` 为 JSON 序列化的完整事件对象。
 
-| event | data | 说明 |
-|-------|------|------|
-| `token` | 文本 delta（字符串） | LLM 每生成一个 token 推送一次 |
-| `done` | `{ "content": "...", "sessionKey": "..." }` | 全部生成完毕，含最终完整内容 |
-| `error` | 错误信息（字符串） | 发生异常时推送，之后流关闭 |
+| event | data 说明 | 何时出现 |
+|-------|-----------|----------|
+| `message_start` | `{"type":"message_start"}` | 流开始，第一条事件 |
+| `think_start` | `{"type":"think_start"}` | 深度思考开始（仅支持 reasoning 的模型） |
+| `think_delta` | `{"type":"think_delta","content":"…"}` | 推理内容增量，可多次 |
+| `think_end` | `{"type":"think_end"}` | 深度思考结束 |
+| `text_delta` | `{"type":"text_delta","content":"…"}` | LLM 文本 token 增量，可多次 |
+| `tool_start` | `{"type":"tool_start","callId":"…","name":"…","arguments":{…}}` | 工具调用开始 |
+| `tool_stdout` | `{"type":"tool_stdout","callId":"…","data":"…"}` | 工具实时输出（如 Shell 的 stdout），可多次 |
+| `tool_end` | `{"type":"tool_end","callId":"…","result":"…"}` | 工具调用结束，`result` 为完整返回值 |
+| `message_end` | `{"type":"message_end","content":"…"}` | 流正常结束，`content` 为最终完整回复 |
+| `error` | `{"type":"error","message":"…"}` | 发生错误，流关闭 |
 
 **示例流输出**：
 
 ```
-event: token
-data: 工
+event: message_start
+data: {"type":"message_start"}
 
-event: token
-data: 作目录
+event: text_delta
+data: {"type":"text_delta","content":"工作"}
 
-event: token
-data: 下有以下文件：
+event: text_delta
+data: {"type":"text_delta","content":"目录下"}
 
-event: done
-data: {"content":"工作目录下有以下文件：README.md, src/","sessionKey":"user-123"}
+event: tool_start
+data: {"type":"tool_start","callId":"call_1","name":"exec","arguments":{"command":"ls"}}
+
+event: tool_stdout
+data: {"type":"tool_stdout","callId":"call_1","data":"README.md\nsrc\n"}
+
+event: tool_end
+data: {"type":"tool_end","callId":"call_1","result":"README.md\nsrc\n"}
+
+event: text_delta
+data: {"type":"text_delta","content":"工作目录下有以下文件：README.md, src/。"}
+
+event: message_end
+data: {"type":"message_end","content":"工作目录下有以下文件：README.md, src/。"}
 ```
 
-**JavaScript 客户端示例**：
+**JavaScript 客户端示例**（按事件类型渲染）：
 
 ```javascript
 const res = await fetch('/agents/my-agent/chat/stream', {
@@ -245,13 +265,19 @@ const res = await fetch('/agents/my-agent/chat/stream', {
 
 const reader = res.body.getReader();
 const decoder = new TextDecoder();
+let buffer = '';
 
 for await (const chunk of readChunks(reader)) {
-  const lines = decoder.decode(chunk).split('\n');
+  buffer += decoder.decode(chunk, { stream: true });
+  const lines = buffer.split('\n');
+  buffer = lines.pop() ?? '';
+  let eventType = 'message';
   for (const line of lines) {
+    if (line.startsWith('event:')) eventType = line.slice(6).trim();
     if (line.startsWith('data:')) {
-      const data = line.slice(5).trim();
-      process.stdout.write(data); // 逐 token 打印
+      const data = JSON.parse(line.slice(5).trim());
+      if (data.type === 'text_delta') process.stdout.write(data.content);
+      if (data.type === 'message_end') console.log('\n完整回复:', data.content);
     }
   }
 }
@@ -448,36 +474,11 @@ const ws = new WebSocket('ws://localhost:3000/ws');
 
 ---
 
-## Web UI
-
-服务器内置了一个 React 前端界面，提供可视化的 agent 管理和聊天体验。
-
-### 构建与访问
-
-```bash
-# 构建 Web UI（生成静态资源到 packages/web-ui/dist/）
-pnpm build:ui
-
-# 启动服务器（自动提供 Web UI）
-node packages/server/dist/index.js
-```
-
-访问 `http://localhost:3000/app/` 打开 Web UI。
-
-### 功能
-
-- **侧边栏**：显示所有 agent 及状态，支持一键创建 agent
-- **单聊**：与指定 agent 进行对话（输入 `/new` 开启新会话）
-- **群组聊天**：创建群组后，消息广播给所有成员；支持 `@agentId` 定向发送
-- **暗色模式**：自动跟随系统偏好
-- **实时连接状态**：顶部显示 WebSocket 连接状态，断线自动重连
-
-### 禁用 Web UI / WebSocket
+### 禁用 WebSocket
 
 ```json
 {
   "port": 3000,
-  "webChannel": false,
-  "webUI": false
+  "webChannel": false
 }
 ```

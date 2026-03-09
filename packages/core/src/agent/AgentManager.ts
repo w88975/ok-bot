@@ -17,6 +17,7 @@ import type {
   WorkerOutboundMessage,
 } from '../types.js';
 import type { InboundMessage, OutboundMessage } from '../bus/events.js';
+import type { AgentEvent, OnEvent } from './AgentEvent.js';
 
 /** Agent 未找到时的错误 */
 export class AgentNotFoundError extends Error {
@@ -31,10 +32,8 @@ interface PendingRequest {
   resolve: (msg: OutboundMessage) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
-  /** SSE 流式 token 回调（可选） */
-  onToken?: (token: string) => void;
-  /** 工具调用进度回调（可选） */
-  onProgress?: (hint: string) => void;
+  /** 结构化 agent 事件回调（可选） */
+  onEvent?: OnEvent;
 }
 
 /** 内部 agent 实例记录 */
@@ -157,15 +156,10 @@ export class AgentManager {
     media?: string[];
     metadata?: Record<string, unknown>;
     /**
-     * SSE 流式 token 回调
-     * 提供时，Worker 每生成一个 token 即调用一次，最终仍 resolve 完整 OutboundMessage
+     * 结构化 agent 事件回调
+     * 提供时，Worker 每产生一个 AgentEvent 即调用一次，最终仍 resolve 完整 OutboundMessage
      */
-    onToken?: (token: string) => void;
-    /**
-     * 工具调用进度回调
-     * 提供时，Worker 每次工具调用时调用一次，不影响最终 resolve
-     */
-    onProgress?: (hint: string) => void;
+    onEvent?: OnEvent;
   }): Promise<OutboundMessage> {
     const instance = this._getAgent(options.agentId);
     const requestId = Math.random().toString(36).slice(2, 18);
@@ -188,7 +182,7 @@ export class AgentManager {
         reject(new Error(`Agent "${options.agentId}" 请求超时（${this.requestTimeoutMs}ms）`));
       }, this.requestTimeoutMs);
 
-      instance.pendingRequests.set(requestId, { resolve, reject, timer, onToken: options.onToken, onProgress: options.onProgress });
+      instance.pendingRequests.set(requestId, { resolve, reject, timer, onEvent: options.onEvent });
 
       const workerMsg: WorkerInboundMessage = {
         type: 'message',
@@ -267,15 +261,9 @@ export class AgentManager {
     if (msg.requestId) {
       const pending = instance.pendingRequests.get(msg.requestId);
       if (pending) {
-        // SSE 流式 token：转发给调用方回调，不结束 pending
-        if (msg.type === 'token' && msg.token !== undefined) {
-          pending.onToken?.(msg.token);
-          return;
-        }
-
-        // 工具调用进度：转发给调用方回调，不结束 pending
-        if (msg.type === 'progress' && msg.hint !== undefined) {
-          pending.onProgress?.(msg.hint);
+        // 结构化 agent 事件：转发给调用方回调，不结束 pending
+        if (msg.type === 'event' && msg.event !== undefined) {
+          void (pending.onEvent?.(msg.event as AgentEvent));
           return;
         }
 

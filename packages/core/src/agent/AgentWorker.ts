@@ -29,6 +29,7 @@ const provider = new VercelAIProvider({
   model: config.provider.model,
   apiKey: config.provider.apiKey,
   baseURL: config.provider.baseURL,
+  thinking: config.provider.thinking,
 });
 
 // 创建 AgentLoop（从 config 中解构，排除 ProviderConfig，改为传入 ILLMProvider 实例）
@@ -113,29 +114,18 @@ parentPort.on('message', async (msg: WorkerInboundMessage) => {
         inbound.metadata = { ...inbound.metadata, _requestId: msg.requestId };
       }
 
-      // 若请求携带 requestId，创建 onToken 回调把 token 实时转发给主线程
-      const onToken = msg.requestId
-        ? (token: string) => {
+      // 若请求携带 requestId，创建 onEvent 回调把结构化事件实时转发给主线程
+      const onEvent = msg.requestId
+        ? (event: import('./AgentEvent.js').AgentEvent) => {
             parentPort!.postMessage({
-              type: 'token',
-              token,
+              type: 'event',
+              event,
               requestId: msg.requestId,
             } satisfies WorkerOutboundMessage);
           }
         : undefined;
 
-      // 若请求携带 requestId，创建 onProgress 回调把工具调用进度转发给主线程
-      const onProgress = msg.requestId
-        ? (hint: string) => {
-            parentPort!.postMessage({
-              type: 'progress',
-              hint,
-              requestId: msg.requestId,
-            } satisfies WorkerOutboundMessage);
-          }
-        : undefined;
-
-      const response = await agentLoop.processMessage(inbound, onProgress, onToken);
+      const response = await agentLoop.processMessage(inbound, onEvent);
 
       if (response) {
         const outMsg: WorkerOutboundMessage = {

@@ -13,6 +13,7 @@ import type { CoreMessage } from 'ai';
 import type { ILLMProvider } from '../providers/types.js';
 import type { MessageBus } from '../bus/MessageBus.js';
 import type { InboundMessage, OutboundMessage } from '../bus/events.js';
+import type { OnEvent } from './AgentEvent.js';
 import { ToolRegistry } from '../tools/ToolRegistry.js';
 import { ContextBuilder, RUNTIME_CONTEXT_TAG } from '../context/ContextBuilder.js';
 import { SessionManager } from '../memory/SessionManager.js';
@@ -27,21 +28,10 @@ import { SkillsLoader } from '../skills/SkillsLoader.js';
 import { createSkillTools } from '../skills/SkillTools.js';
 import type { AgentConfig } from '../types.js';
 
+export type { OnEvent };
+
 /** 工具结果最大字符数（超出截断存入 history） */
 const TOOL_RESULT_MAX_CHARS = 500;
-
-/**
- * 进度回调类型
- * @param content 进度内容
- * @param options 附加选项
- */
-export type OnProgress = (content: string, options?: { toolHint?: boolean }) => Promise<void> | void;
-
-/**
- * SSE 流式 token 回调类型
- * 每个文本 delta 触发一次，用于实时输出 LLM 生成的字符
- */
-export type OnToken = (token: string) => void;
 
 /**
  * AgentLoop — 单个 agent 的核心处理引擎
@@ -106,8 +96,6 @@ export class AgentLoop {
       this.tools.register(skillTool);
     }
 
-    this.messageTool = new MessageTool((msg) => this.bus.publishOutbound(msg));
-
     this.subagentManager = new SubagentManager({
       provider: this.provider,
       workspace: config.workspace,
@@ -128,14 +116,12 @@ export class AgentLoop {
    * 处理一条入站消息，返回出站消息
    *
    * @param msg 入站消息
-   * @param onProgress 进度回调（工具提示、中间内容，可选）
-   * @param onToken SSE 流式 token 回调（可选）；提供时使用 streamText 实时输出
+   * @param onEvent 结构化事件回调（可选）；提供时实时 emit message_start/text_delta/tool_start/think_start 等事件
    * @returns 出站消息；无需额外回复时返回 null
    */
   async processMessage(
     msg: InboundMessage,
-    onProgress?: OnProgress,
-    onToken?: OnToken,
+    onEvent?: OnEvent,
   ): Promise<OutboundMessage | null> {
     // system channel：子 agent 结果注回
     if (msg.channel === 'system') {
@@ -172,16 +158,7 @@ export class AgentLoop {
       chatId: msg.chatId,
     });
 
-    const progressCb: OnProgress = onProgress ?? (async (content, opts) => {
-      await this.bus.publishOutbound({
-        channel: msg.channel,
-        chatId: msg.chatId,
-        content,
-        metadata: { _progress: true, _toolHint: opts?.toolHint ?? false },
-      });
-    });
-
-    const { finalContent, allMessages } = await this._runLoop(messages, progressCb, onToken);
+    const { finalContent, allMessages } = await this._runLoop(messages, onEvent);
 
     // 保存本轮消息到 session history
     this._saveTurn(session, allMessages, 1 + history.length);
@@ -203,57 +180,64 @@ export class AgentLoop {
   /**
    * 执行 LLM → 工具调用迭代循环
    *
-   * @param onToken 提供时透传给每次 provider.chat() 调用，启用 SSE 流式输出
+   * emit 顺序：message_start → [think_* | text_delta | tool_start/stdout/end]* → message_end
+   * 出错时 emit error 后抛出异常。
    */
   private async _runLoop(
     initialMessages: CoreMessage[],
-    onProgress: OnProgress,
-    onToken?: OnToken,
+    onEvent?: OnEvent,
   ): Promise<{ finalContent: string | null; allMessages: CoreMessage[] }> {
     let messages = initialMessages;
     let finalContent: string | null = null;
 
-    for (let i = 0; i < this.maxIterations; i++) {
-      const response = await this.provider.chat(messages, this.tools.getDefinitions(), {
-        model: this.model,
-        temperature: this.temperature,
-        maxTokens: this.maxTokens,
-        onToken,
-      });
+    await onEvent?.({ type: 'message_start' });
 
-      if (response.toolCalls.length > 0) {
-        // 流式模式下中间内容已经由 onToken 输出，跳过 onProgress 避免重复打印
-        if (response.content && !onToken) await onProgress(response.content);
-        const hint = response.toolCalls
-          .map((tc) => {
-            const firstArg = Object.values(tc.arguments)[0];
-            const argStr = typeof firstArg === 'string' ? firstArg.slice(0, 40) : '';
-            return `${tc.name}("${argStr}")`;
-          })
-          .join(', ');
-        await onProgress(hint, { toolHint: true });
+    try {
+      for (let i = 0; i < this.maxIterations; i++) {
+        const response = await this.provider.chat(messages, this.tools.getDefinitions(), {
+          model: this.model,
+          temperature: this.temperature,
+          maxTokens: this.maxTokens,
+          onEvent,
+        });
 
-        // 追加 assistant 消息（含工具调用）
-        messages = this.contextBuilder.addAssistantMessage(messages, response.content, response.toolCalls);
+        if (response.toolCalls.length > 0) {
+          // 追加 assistant 消息（含工具调用）
+          messages = this.contextBuilder.addAssistantMessage(messages, response.content, response.toolCalls);
 
-        // 顺序执行所有工具调用
-        for (const tc of response.toolCalls) {
-          console.info(`[AgentLoop] 工具调用：${tc.name}(${JSON.stringify(tc.arguments).slice(0, 100)})`);
-          const result = await this.tools.execute(tc.name, tc.arguments);
-          messages = this.contextBuilder.addToolResult(messages, tc.id, tc.name, result);
+          // 顺序执行所有工具调用
+          for (const tc of response.toolCalls) {
+            console.info(`[AgentLoop] 工具调用：${tc.name}(${JSON.stringify(tc.arguments).slice(0, 100)})`);
+
+            await onEvent?.({ type: 'tool_start', callId: tc.id, name: tc.name, arguments: tc.arguments });
+
+            const result = await this.tools.execute(tc.name, tc.arguments, {
+              onStdout: (data) => { void onEvent?.({ type: 'tool_stdout', callId: tc.id, data }); },
+            });
+
+            await onEvent?.({ type: 'tool_end', callId: tc.id, result });
+
+            messages = this.contextBuilder.addToolResult(messages, tc.id, tc.name, result);
+          }
+        } else {
+          // 无工具调用，得到最终回复
+          messages = this.contextBuilder.addAssistantMessage(messages, response.content);
+          finalContent = response.content;
+          break;
         }
-      } else {
-        // 无工具调用，得到最终回复
-        messages = this.contextBuilder.addAssistantMessage(messages, response.content);
-        finalContent = response.content;
-        break;
       }
-    }
 
-    if (finalContent === null) {
-      console.warn(`[AgentLoop] 达到最大迭代次数（${this.maxIterations}），强制终止`);
-      finalContent =
-        `已达到最大工具调用次数（${this.maxIterations}）。请尝试将任务拆分为更小的步骤。`;
+      if (finalContent === null) {
+        console.warn(`[AgentLoop] 达到最大迭代次数（${this.maxIterations}），强制终止`);
+        finalContent =
+          `已达到最大工具调用次数（${this.maxIterations}）。请尝试将任务拆分为更小的步骤。`;
+      }
+
+      await onEvent?.({ type: 'message_end', content: finalContent });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await onEvent?.({ type: 'error', message });
+      throw err;
     }
 
     return { finalContent, allMessages: messages };
@@ -329,7 +313,7 @@ export class AgentLoop {
       chatId,
     });
 
-    const { finalContent, allMessages } = await this._runLoop(messages, async () => {});
+    const { finalContent, allMessages } = await this._runLoop(messages);
 
     this._saveTurn(session, allMessages, 1 + history.length);
     this.sessionManager.save(session);

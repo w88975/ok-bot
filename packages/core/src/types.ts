@@ -53,6 +53,17 @@ export interface ProviderConfig {
    * 例如："https://api.z.ai/api/coding/paas/v4"
    */
   baseURL?: string;
+  /**
+   * 深度思考配置（仅对支持 reasoning 的模型有效）
+   * - Anthropic：enabled=true 时传入 providerOptions.anthropic.thinking
+   * - DeepSeek-R1：thinking 自动开启，无需配置
+   * - 其他 provider：忽略此配置，不会报错
+   */
+  thinking?: {
+    enabled: boolean;
+    /** Anthropic 专属：reasoning token 预算（默认 8000） */
+    budgetTokens?: number;
+  };
 }
 
 /** Shell exec 工具配置 */
@@ -98,15 +109,13 @@ export interface WorkerInboundMessage {
 
 /** Worker Thread 消息协议 — 出站（Worker → 主线程） */
 export interface WorkerOutboundMessage {
-  type: 'response' | 'error' | 'ready' | 'token' | 'progress';
+  type: 'response' | 'error' | 'ready' | 'event';
   /** 出站消息载荷（type='response' 时有效） */
   payload?: import('./bus/events.js').OutboundMessage;
   /** 对应请求 ID */
   requestId?: string;
   /** 错误信息（type='error' 时有效） */
   error?: string;
-  /** 流式 token 文本（type='token' 时有效） */
-  token?: string;
-  /** 工具调用进度提示（type='progress' 时有效） */
-  hint?: string;
+  /** 结构化 agent 事件（type='event' 时有效） */
+  event?: import('./agent/AgentEvent.js').AgentEvent;
 }

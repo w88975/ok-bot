@@ -7,6 +7,12 @@
 import { tool as aiTool, type Tool } from 'ai';
 import { z } from 'zod';
 
+/** 工具执行上下文，供工具实现使用（如 ShellTool 的实时 stdout 推送） */
+export interface ToolExecuteContext {
+  /** 实时 stdout/stderr 数据回调（仅 ShellTool 等流式工具使用） */
+  onStdout?: (data: string) => void;
+}
+
 /**
  * 工具定义接口
  * 每个工具需要提供名称、描述、参数 schema 和执行函数
@@ -18,8 +24,8 @@ export interface ToolDefinition<T extends z.ZodTypeAny = z.ZodTypeAny> {
   description: string;
   /** 参数 schema（zod 定义） */
   parameters: T;
-  /** 执行函数，接收解析后的参数，返回字符串结果 */
-  execute: (args: z.infer<T>) => Promise<string>;
+  /** 执行函数，接收解析后的参数和可选执行上下文，返回字符串结果 */
+  execute: (args: z.infer<T>, context?: ToolExecuteContext) => Promise<string>;
 }
 
 /**
@@ -72,9 +78,10 @@ export class ToolRegistry {
    *
    * @param name 工具名称
    * @param args 工具参数（未经验证的原始对象）
+   * @param context 可选执行上下文（如 onStdout 用于 ShellTool 流式输出）
    * @returns 执行结果字符串；工具不存在或执行失败时返回错误描述
    */
-  async execute(name: string, args: Record<string, unknown>): Promise<string> {
+  async execute(name: string, args: Record<string, unknown>, context?: ToolExecuteContext): Promise<string> {
     const definition = this.tools.get(name);
     if (!definition) {
       return `错误：工具 "${name}" 未注册`;
@@ -83,7 +90,7 @@ export class ToolRegistry {
     try {
       // 使用 zod schema 解析并验证参数
       const parsed = definition.parameters.parse(args);
-      return await definition.execute(parsed);
+      return await definition.execute(parsed, context);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `工具 "${name}" 执行失败：${message}`;

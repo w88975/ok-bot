@@ -20,7 +20,8 @@
 // ─── Agent ────────────────────────────────────────────────────────────────────
 export { AgentManager, AgentNotFoundError } from './agent/AgentManager.js';
 export { AgentLoop } from './agent/AgentLoop.js';
-export type { OnProgress, OnToken } from './agent/AgentLoop.js';
+export type { OnEvent } from './agent/AgentEvent.js';
+export type { AgentEvent } from './agent/AgentEvent.js';
 export { SubagentManager } from './agent/SubagentManager.js';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ export type { StoredMessage } from './memory/SessionManager.js';
 
 // ─── Tools ────────────────────────────────────────────────────────────────────
 export { ToolRegistry } from './tools/ToolRegistry.js';
-export type { ToolDefinition, ContextAwareTool } from './tools/ToolRegistry.js';
+export type { ToolDefinition, ContextAwareTool, ToolExecuteContext } from './tools/ToolRegistry.js';
 export { createFileSystemTools } from './tools/builtin/FileSystemTools.js';
 export { createShellTool } from './tools/builtin/ShellTool.js';
 export { createWebSearchTool, createWebFetchTool } from './tools/builtin/WebTools.js';

@@ -1,6 +1,6 @@
 /**
  * Vercel AI SDK Provider 封装
- * 统一封装 generateText，支持通过模型字符串切换不同 LLM provider
+ * 统一封装 generateText/streamText，支持通过模型字符串切换不同 LLM provider
  * 模型格式："provider:model"，如 "openai:gpt-4o"、"anthropic:claude-3-5-sonnet-20241022"
  */
 
@@ -99,6 +99,12 @@ export function sanitizeEmptyContent(messages: CoreMessage[]): CoreMessage[] {
   });
 }
 
+/** thinking 配置类型 */
+interface ThinkingConfig {
+  enabled: boolean;
+  budgetTokens?: number;
+}
+
 /**
  * VercelAIProvider — 基于 Vercel AI SDK 的 LLM Provider 实现
  *
@@ -123,11 +129,14 @@ export class VercelAIProvider implements ILLMProvider {
    * 例如：https://api.z.ai/api/coding/paas/v4
    */
   private readonly baseURL?: string;
+  /** 深度思考配置（仅对支持 reasoning 的模型有效） */
+  private readonly thinking?: ThinkingConfig;
 
-  constructor(config: { model: string; apiKey?: string; baseURL?: string }) {
+  constructor(config: { model: string; apiKey?: string; baseURL?: string; thinking?: ThinkingConfig }) {
     this.defaultModel = config.model;
     this.apiKey = config.apiKey;
     this.baseURL = config.baseURL;
+    this.thinking = config.thinking;
   }
 
   /**
@@ -141,12 +150,14 @@ export class VercelAIProvider implements ILLMProvider {
   /**
    * 发起 LLM chat 请求
    *
-   * 内部使用 Vercel AI SDK 的 `generateText`（非 streaming）。
+   * - 提供 `options.onEvent` 时：使用 `streamText + fullStream` 实时 emit 结构化事件
+   * - 否则：使用 `generateText` 批量返回
+   *
    * 工具调用在 AgentLoop 中手动迭代，因此 maxSteps 固定为 1。
    *
    * @param messages - CoreMessage 格式的消息列表
    * @param tools - Vercel AI SDK tool Record（可选，无工具时传 undefined）
-   * @param options - 覆盖默认参数（model、temperature、maxTokens）
+   * @param options - 覆盖默认参数（model、temperature、maxTokens、onEvent）
    * @returns LLM 响应（含文本内容或工具调用列表）
    */
   async chat(
@@ -162,21 +173,57 @@ export class VercelAIProvider implements ILLMProvider {
 
     const hasTools = tools && Object.keys(tools).length > 0;
 
-    // ── 流式模式（onToken 存在时） ────────────────────────────────────────────
-    if (options?.onToken) {
+    // ── 流式模式（onEvent 存在时） ────────────────────────────────────────────
+    if (options?.onEvent) {
+      const onEvent = options.onEvent;
+
+      // Anthropic 深度思考：仅当 provider 为 anthropic 且 thinking.enabled 时传入
+      const providerName = modelString.slice(0, modelString.indexOf(':'));
+      const thinkingCfg = this.thinking;
+      const providerOptions =
+        thinkingCfg?.enabled && providerName === 'anthropic'
+          ? {
+              anthropic: {
+                thinking: {
+                  type: 'enabled' as const,
+                  budgetTokens: thinkingCfg.budgetTokens ?? 8000,
+                },
+              },
+            }
+          : undefined;
+
       const result = streamText({
         model: languageModel,
         messages: cleanedMessages,
         tools: hasTools ? tools : undefined,
         temperature: options?.temperature ?? 0.1,
         maxTokens: options?.maxTokens ?? 4096,
-        // AgentLoop 负责手动迭代工具调用，SDK 只做单步
         maxSteps: 1,
+        providerOptions,
       });
 
-      // 逐 token 推送，同时消耗流（必须消耗完毕才能拿到 toolCalls / text）
-      for await (const delta of result.textStream) {
-        options.onToken(delta);
+      // 遍历 fullStream，按 chunk 类型 dispatch 对应 AgentEvent
+      let thinkingActive = false;
+      for await (const chunk of result.fullStream) {
+        if (chunk.type === 'reasoning') {
+          if (!thinkingActive) {
+            await onEvent({ type: 'think_start' });
+            thinkingActive = true;
+          }
+          await onEvent({ type: 'think_delta', content: chunk.textDelta });
+        } else if (chunk.type === 'text-delta') {
+          if (thinkingActive) {
+            await onEvent({ type: 'think_end' });
+            thinkingActive = false;
+          }
+          await onEvent({ type: 'text_delta', content: chunk.textDelta });
+        }
+        // tool-call、finish、error 由 AgentLoop 通过 result.toolCalls 处理
+      }
+
+      // 确保 think_end 配对（边缘情况：流结束时仍在 thinking 状态）
+      if (thinkingActive) {
+        await onEvent({ type: 'think_end' });
       }
 
       const text = await result.text;
@@ -207,11 +254,9 @@ export class VercelAIProvider implements ILLMProvider {
       tools: hasTools ? tools : undefined,
       temperature: options?.temperature ?? 0.1,
       maxTokens: options?.maxTokens ?? 4096,
-      // AgentLoop 负责手动迭代工具调用，SDK 只做单步
       maxSteps: 1,
     });
 
-    // 将 SDK 工具调用格式转换为统一接口格式
     const toolCalls = result.toolCalls.map((tc) => ({
       id: tc.toolCallId,
       name: tc.toolName,

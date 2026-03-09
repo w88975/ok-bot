@@ -1,10 +1,16 @@
 /**
- * ok-bot 快速启动脚本（CLI 交互模式，支持流式进度输出）
+ * ok-bot 快速启动脚本（CLI 交互模式，支持结构化事件流式输出）
  *
  * 运行：node start.mjs
+ *
+ * 使用 OnEvent API：message_start → think_* / text_delta / tool_* → message_end
  */
 
-import { AgentLoop, VercelAIProvider, MessageBus } from "./packages/core/dist/index.js";
+import {
+  AgentLoop,
+  VercelAIProvider,
+  MessageBus,
+} from "./packages/core/dist/index.js";
 import readline from "node:readline";
 import os from "node:os";
 import path from "node:path";
@@ -33,37 +39,78 @@ const agentLoop = new AgentLoop({
   maxTokens: 4096,
 });
 
-// 追踪上一次输出是否为流式 token（用于在 onProgress 前换行）
-let lastWasToken = false;
-// 追踪本轮是否有过 token 输出（用于判断结束时是否需要额外换行）
-let tokenStreamed = false;
+// 是否正在输出流式内容（用于在 tool_start 等前换行）
+let streaming = false;
+// 本轮是否已有流式输出（用于结束时判断是否再打印 response.content）
+let hadStreamingThisTurn = false;
 
 /**
- * SSE 流式 token 回调 — LLM 每生成一个 token 立即调用
- * @param {string} token
+ * 结构化事件回调 — 按 AgentEvent 类型在终端展示
+ * @param {import('@ok-bot/core').AgentEvent} event
  */
-function onToken(token) {
-  process.stdout.write(token);
-  lastWasToken = true;
-  tokenStreamed = true;
-}
+function onEvent(event) {
+  switch (event.type) {
+    case "message_start":
+      streaming = false;
+      hadStreamingThisTurn = false;
+      break;
 
-/**
- * 进度回调 — 在 AgentLoop 每轮工具迭代时调用（工具提示等）
- * @param {string} content
- * @param {{ toolHint?: boolean }} [opts]
- */
-function onProgress(content, opts) {
-  if (!content) return;
-  // 若前面有流式 token 输出，先补一个换行避免内容粘连
-  if (lastWasToken) {
-    process.stdout.write("\n");
-    lastWasToken = false;
-  }
-  if (opts?.toolHint) {
-    process.stdout.write(dim(`  ⚙ ${content}`) + "\n");
-  } else {
-    process.stdout.write(dim(`  ${content}`) + "\n");
+    case "think_start":
+      if (streaming) process.stdout.write("\n");
+      process.stdout.write(dim("  💭 思考中…\n"));
+      streaming = false;
+      break;
+
+    case "think_delta":
+      process.stdout.write(dim(event.content));
+      streaming = true;
+      hadStreamingThisTurn = true;
+      break;
+
+    case "think_end":
+      process.stdout.write("\n");
+      streaming = false;
+      break;
+
+    case "text_delta":
+      process.stdout.write(event.content);
+      streaming = true;
+      hadStreamingThisTurn = true;
+      break;
+
+    case "tool_start":
+      if (streaming) process.stdout.write("\n");
+      const argsPreview =
+        typeof event.arguments?.command === "string"
+          ? event.arguments.command.slice(0, 50)
+          : JSON.stringify(event.arguments).slice(0, 50);
+      process.stdout.write(dim(`  ⚙ ${event.name}(${argsPreview}${argsPreview.length >= 50 ? "…" : ""})\n`));
+      streaming = false;
+      break;
+
+    case "tool_stdout":
+      process.stdout.write(dim(event.data));
+      streaming = true;
+      break;
+
+    case "tool_end":
+      if (streaming) process.stdout.write("\n");
+      streaming = false;
+      break;
+
+    case "message_end":
+      if (streaming) process.stdout.write("\n");
+      streaming = false;
+      break;
+
+    case "error":
+      if (streaming) process.stdout.write("\n");
+      process.stderr.write(`\x1b[31m错误: ${event.message}\x1b[0m\n`);
+      streaming = false;
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -94,22 +141,14 @@ async function main() {
       try {
         process.stdout.write("\n" + cyan("ok-bot:") + "\n");
 
-        // 重置流式状态
-        lastWasToken = false;
-        tokenStreamed = false;
-
         const response = await agentLoop.processMessage(
           { channel: "cli", senderId: "user", chatId: "cli:local", content: text },
-          onProgress,
-          onToken,
+          onEvent,
         );
 
         if (response) {
-          if (tokenStreamed) {
-            // 内容已通过 onToken 逐 token 输出，只需补换行
-            process.stdout.write("\n");
-          } else {
-            // 未使用流式（如 /help 等内置命令），直接打印
+          // 未走流式（如 /help、/new 等）时直接打印
+          if (!hadStreamingThisTurn && response.content) {
             console.log(response.content);
           }
         }

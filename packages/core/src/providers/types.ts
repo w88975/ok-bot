@@ -4,6 +4,7 @@
  */
 
 import type { CoreMessage } from 'ai';
+import type { OnEvent } from '../agent/AgentEvent.js';
 
 /** 工具调用请求 — LLM 要求执行的工具 */
 export interface ToolCallRequest {
@@ -59,8 +60,10 @@ export interface ChatOptions {
   /** 最大输出 token */
   maxTokens?: number;
   /**
-   * SSE 流式 token 回调
-   * 提供时使用 streamText 替代 generateText，每个文本 delta 触发一次
+   * 结构化 agent 事件回调
+   * 提供时使用 fullStream 替代 generateText，实时 emit think/text/tool 等事件
    */
-  onToken?: (token: string) => void;
+  onEvent?: OnEvent;
 }
+
+export type { OnEvent };

@@ -47,9 +47,18 @@ export function chatRouter(manager: AgentManager): Hono {
    * 发送消息（SSE 流式）
    * Body: { content: string, sessionKey?: string, channel?: string, chatId?: string }
    * Response: text/event-stream
-   *   - event: token  — LLM 逐 token 输出
-   *   - event: done   — 最终完整内容
-   *   - event: error  — 错误信息
+   *
+   * SSE event name 直接对应 AgentEvent.type：
+   *   - event: message_start    — LLM 开始处理
+   *   - event: think_start      — 深度思考开始（仅支持 reasoning 的模型）
+   *   - event: think_delta      — 推理内容增量（data: {"type":"think_delta","content":"..."}）
+   *   - event: think_end        — 深度思考结束
+   *   - event: text_delta       — 文本 token 增量（data: {"type":"text_delta","content":"..."}）
+   *   - event: tool_start       — 工具调用开始（data: {"type":"tool_start","callId":"...","name":"...","arguments":{...}}）
+   *   - event: tool_stdout      — 工具实时输出（data: {"type":"tool_stdout","callId":"...","data":"..."}）
+   *   - event: tool_end         — 工具调用结束（data: {"type":"tool_end","callId":"...","result":"..."}）
+   *   - event: message_end      — LLM 处理完毕（data: {"type":"message_end","content":"..."}）
+   *   - event: error            — 错误（data: {"type":"error","message":"..."}）
    */
   router.post('/:agentId/chat/stream', async (c) => {
     const { agentId } = c.req.param();
@@ -69,30 +78,23 @@ export function chatRouter(manager: AgentManager): Hono {
 
     return streamSSE(c, async (stream) => {
       try {
-        const response = await manager.chat({
+        await manager.chat({
           agentId,
           content: body.content!,
           sessionKey,
           channel: body.channel ?? 'http',
           chatId: body.chatId ?? sessionKey,
           media: body.media,
-          onToken: async (token) => {
-            await stream.writeSSE({ event: 'token', data: token });
+          onEvent: async (event) => {
+            await stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
           },
-          onProgress: async (hint) => {
-            await stream.writeSSE({ event: 'progress', data: hint });
-          },
-        });
-
-        // 最终完整内容（含工具调用后的全文）
-        await stream.writeSSE({
-          event: 'done',
-          data: JSON.stringify({ content: response.content, sessionKey }),
         });
       } catch (err) {
+        // 兜底：AgentLoop 遇到异常时已通过 onEvent 发送 error 事件
+        // 此处捕获的是 AgentLoop 之外的意外错误（如网络、序列化等）
         await stream.writeSSE({
           event: 'error',
-          data: err instanceof Error ? err.message : '未知错误',
+          data: JSON.stringify({ type: 'error', message: err instanceof Error ? err.message : '未知错误' }),
         });
       }
     });

@@ -5,7 +5,7 @@
 
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
-import type { ToolDefinition } from '../ToolRegistry.js';
+import type { ToolDefinition, ToolExecuteContext } from '../ToolRegistry.js';
 
 /** 输出最大字符数（超出截断） */
 const MAX_OUTPUT_CHARS = 10_000;
@@ -61,7 +61,7 @@ export function createShellTool(config: ShellToolConfig): ToolDefinition {
     parameters: z.object({
       command: z.string().describe('要执行的 shell 命令'),
     }),
-    execute: async ({ command }) => {
+    execute: async ({ command }, context?: ToolExecuteContext) => {
       // 危险命令拦截
       if (isDangerous(command)) {
         return `安全拒绝：命令 "${command}" 匹配危险模式，已阻止执行`;
@@ -84,11 +84,15 @@ export function createShellTool(config: ShellToolConfig): ToolDefinition {
         });
 
         child.stdout.on('data', (data: Buffer) => {
-          output += data.toString();
+          const chunk = data.toString();
+          output += chunk;
+          context?.onStdout?.(chunk);
         });
 
         child.stderr.on('data', (data: Buffer) => {
-          output += data.toString();
+          const chunk = data.toString();
+          output += chunk;
+          context?.onStdout?.(chunk);
         });
 
         // 超时处理

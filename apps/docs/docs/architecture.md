@@ -39,15 +39,16 @@ ContextBuilder.buildMessages()
      │  (system prompt: identity → bootstrap → memory → skills)
      ▼
 provider.chat(LLM)
-     │  ├── onToken 未提供 → generateText（非流式）
-     │  └── onToken 已提供 → streamText（SSE 流式，逐 token 回调）
+     │  ├── onEvent 未提供 → generateText（非流式）
+     │  └── onEvent 已提供 → fullStream（流式，按 chunk 类型 emit AgentEvent）
+     │      事件顺序：message_start → think_* / text_delta / tool_* → message_end
      │
      ├── text response → OutboundMessage
      └── tool calls ──┐
                        ▼
-               ToolRegistry.execute(tool)
-                       │
-                       └─ loop again (迭代，继续透传 onToken)
+               ToolRegistry.execute(tool, context?)
+                       │  context.onStdout 可选，用于 Shell 等工具的实时 stdout
+                       └─ loop again (迭代，继续透传 onEvent)
 ```
 
 ## 分层 System Prompt
@@ -93,6 +94,19 @@ WorkerInboundMessage:
 // Worker → 主线程
 WorkerOutboundMessage:
   | { type: 'ready' }
+  | { type: 'event'; event: AgentEvent; requestId?: string }   // 流式：message_start / text_delta / tool_* / think_* / message_end 等
   | { type: 'response'; payload: OutboundMessage; requestId?: string }
   | { type: 'error'; error: string; requestId?: string }
 ```
+
+## 结构化事件（AgentEvent）
+
+流式场景下，Core 与 Server 统一使用 `AgentEvent` 联合类型，SSE 的 `event` 名即 `AgentEvent.type`：
+
+| 类型 | 说明 |
+|------|------|
+| `message_start` / `message_end` | 单次 processMessage 的生命周期 |
+| `think_start` / `think_delta` / `think_end` | 深度思考（仅支持 reasoning 的模型） |
+| `text_delta` | LLM 文本 token 增量 |
+| `tool_start` / `tool_stdout` / `tool_end` | 工具调用及实时 stdout |
+| `error` | 错误信息 |
