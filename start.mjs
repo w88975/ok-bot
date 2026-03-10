@@ -22,7 +22,7 @@ const dim = (s) => `\x1b[2m${s}\x1b[0m`;
 const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
 
 const provider = new VercelAIProvider({
-  model: "openai-compat:qwen-max",
+  model: "openai-compat:qwen3-max-2026-01-23",
   apiKey: "sk-c98a09f4df3442f49ab7e7b5b132b49e",
   baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
 });

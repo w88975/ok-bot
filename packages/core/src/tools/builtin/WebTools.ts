@@ -13,6 +13,7 @@ interface BraveResult {
   description?: string;
 }
 
+// 临时去掉 web-search 工具
 /**
  * 创建 web_search 工具（Brave Search API）
  *

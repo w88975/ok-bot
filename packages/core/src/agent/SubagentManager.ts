@@ -152,7 +152,7 @@ export class SubagentManager {
           pathAppend: this.config.execConfig?.pathAppend,
         }),
       );
-      tools.register(createWebSearchTool(this.config.braveApiKey || undefined));
+      // tools.register(createWebSearchTool(this.config.braveApiKey || undefined));
       tools.register(createWebFetchTool());
 
       const systemPrompt = this._buildSubagentPrompt(task);

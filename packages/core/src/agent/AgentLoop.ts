@@ -83,7 +83,7 @@ export class AgentLoop {
         pathAppend: config.execConfig?.pathAppend,
       }),
     );
-    this.tools.register(createWebSearchTool(config.braveApiKey));
+    // this.tools.register(createWebSearchTool(config.braveApiKey));
     this.tools.register(createWebFetchTool());
 
     this.messageTool = new MessageTool((msg) => this.bus.publishOutbound(msg));

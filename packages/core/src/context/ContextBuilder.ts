@@ -105,7 +105,7 @@ export class ContextBuilder {
         .map((s) => `- \`skill_${s.name.replace(/-/g, '_')}\`：${s.meta.description}`)
         .join('\n');
       parts.push(
-        `# Skills 使用规则\n\n收到用户消息后，先理解用户意图，再检查以下可用技能工具。如果意图与某个技能匹配，**必须优先调用该技能工具**，不得跳过直接回复。\n\n${skillList}`,
+        `# Skills 使用规则\n\n收到用户消息后，先理解用户意图，再检查以下可用技能工具。如果意图与某个技能匹配，**必须优先调用该技能工具**，不得跳过直接回复。\n\n# 可用的Skills列表:\\n\n${skillList}`,
       );
     }
 
@@ -208,6 +208,7 @@ ${platform} ${arch}，Node.js ${nodeVersion}
 - 长期记忆：${workspacePath}/memory/MEMORY.md（写入重要事实）
 - 历史日志：${workspacePath}/memory/HISTORY.md（grep 可搜索）
 - 自定义 skills：${workspacePath}/skills/{skill-name}/SKILL.md
+- 全局 skills：~/.agents/skills/{skill-name}/SKILL.md, ~/.claude/skills/{skill-name}/SKILL.md
 
 ## 使用指南
 - 调用工具前先说明意图，但在收到结果前不要预测结论。
